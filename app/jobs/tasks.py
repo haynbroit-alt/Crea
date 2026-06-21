@@ -85,15 +85,19 @@ def world_episode_task(job_id: str, params: dict) -> None:
         os.makedirs(os.path.dirname(music_path), exist_ok=True)
         generate_music(world, music_path)
 
-        # Images — one per act (Pollinations → Pillow fallback)
+        # Images — one per act (Pollinations → Pillow fallback, corruption applied in-place)
         acts = episode.get("acts", {})
+        corruption = world.get("system_corruption_level", 0.0)
         scene_specs = [
             (acts.get("act1", {}).get("text", ""), True),
             (acts.get("act2", {}).get("text", ""), False),
             (acts.get("act3", {}).get("text", ""), False),
         ]
         image_paths = [
-            generate_scene_image(text[:300], i, output_dir=job_dir, is_hook=is_hook)
+            generate_scene_image(
+                text[:300], i, output_dir=job_dir,
+                is_hook=is_hook, corruption_level=corruption,
+            )
             for i, (text, is_hook) in enumerate(scene_specs)
             if text
         ]
