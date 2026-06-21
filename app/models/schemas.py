@@ -37,3 +37,13 @@ class VideoPlan(BaseModel):
     format: str
     estimated_duration: str
     status: str
+
+
+class RenderResult(BaseModel):
+    job_id: str
+    topic: str
+    video_path: str
+    download_url: str
+    voice_path: str
+    scene_count: int
+    status: str
