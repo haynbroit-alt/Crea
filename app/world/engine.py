@@ -4,6 +4,56 @@ from app.world.catalog import get_memory, next_dilemma
 from app.world.state import get_world, save_world, _lock, _load, _save
 from app.world.narrator import generate_script
 
+_SHADOW_LOG_MAX = 10
+
+
+def _corruption_level(sanity: int) -> float:
+    """0.0 at sanity ≥ 50; rises linearly to 1.0 at sanity = 0."""
+    return round(max(0.0, (50 - sanity) / 50), 3)
+
+
+def _npc_preferred_option(world: dict) -> str:
+    """
+    Panicked NPCs sacrifice the most abstract memory to protect concrete ones.
+    Higher tier = more abstract (tier 3 = existential, tier 1 = sensory).
+    """
+    dilemma = world.get("current_dilemma")
+    if not dilemma:
+        return "A"
+    tier_a = get_memory(dilemma["option_A"]["sacrifice"]).get("tier", 1)
+    tier_b = get_memory(dilemma["option_B"]["sacrifice"]).get("tier", 1)
+    if tier_a > tier_b:
+        return "A"
+    if tier_b > tier_a:
+        return "B"
+    # Same tier: mirror real majority
+    votes = world["vote_counts"]
+    return "A" if votes.get("A", 0) >= votes.get("B", 0) else "B"
+
+
+def _inject_ghost_votes(world: dict, corruption: float) -> int:
+    """
+    When corruption > 0.3, panicked NPCs inject phantom votes.
+    Returns ghost vote count (0 if below threshold or no real votes).
+    """
+    if corruption <= 0.3:
+        return 0
+    total_real = sum(world["vote_counts"].values())
+    if total_real == 0:
+        return 0
+    phantom_count = int(total_real * corruption * 0.5)
+    world["vote_counts"][_npc_preferred_option(world)] += phantom_count
+    return phantom_count
+
+
+def _append_shadow_log(world: dict, day: int, phantom_count: int) -> None:
+    log = world.setdefault("shadow_log", [])
+    log.append(
+        f"[SYS_ERR_D{day:03d}] {phantom_count} anomalie(s) dans le registre. "
+        "Origine : non résolue. Intégrité des données : compromise."
+    )
+    world["shadow_log"] = log[-_SHADOW_LOG_MAX:]
+
 
 def advance_day() -> dict:
     """
@@ -18,8 +68,15 @@ def advance_day() -> dict:
         if not world.get("voting_open"):
             raise RuntimeError("Voting is already closed for today")
 
+        # ── Corruption & ghost votes (before winner is decided) ───────────────
+        corruption = _corruption_level(world["collective_sanity"])
+        world["system_corruption_level"] = corruption
+        phantom_count = _inject_ghost_votes(world, corruption)
+        if phantom_count:
+            _append_shadow_log(world, world["day"], phantom_count)
+
+        # ── Winner determination ──────────────────────────────────────────────
         votes = world["vote_counts"]
-        # Tiebreaker: A wins on tie (Council of Elders casts deciding vote)
         winner = "A" if votes.get("A", 0) >= votes.get("B", 0) else "B"
         losing_option = "B" if winner == "A" else "A"
 
@@ -49,7 +106,11 @@ def advance_day() -> dict:
         world["voting_open"] = False
         episode = generate_script(world, lost_today_id=lost_id)
         episode.update({
-            "vote_result": {"winner": winner, "votes": dict(votes)},
+            "vote_result": {
+                "winner": winner,
+                "votes": dict(votes),
+                "phantom_votes": phantom_count or None,
+            },
             "protected": protected_id,
             "lost": lost_id,
             "resolved_at": datetime.now(timezone.utc).isoformat(),
@@ -85,7 +146,6 @@ def advance_day() -> dict:
                 },
             }
         else:
-            # All memories exhausted
             world["current_dilemma"] = None
             world["voting_open"] = False
 

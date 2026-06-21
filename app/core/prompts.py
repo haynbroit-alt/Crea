@@ -10,7 +10,7 @@ Mémoire perdue cette nuit : {lost_memory_name}
 Conséquence documentée : {consequence}
 Sanité collective : {sanity}/100
 Souvenirs perdus jusqu'ici : {lost_count}
-
+{corruption_directive}
 Environ 80 mots. Commence par "Jour {day}.". Montre la découverte au matin — comment les habitants réalisent que quelque chose manque. Réinterprète la conséquence avec une scène concrète et sensorielle, ne la répète pas mot à mot."""
 
 WORLD_ACT2_PROMPT = """Écris l'Acte 2 (L'Événement du Jour) de l'épisode du Jour {day}.
@@ -19,8 +19,32 @@ Sanité collective : {sanity}/100
 Émerveillement : {wonder}/100
 Infrastructure : {infra}/100
 Souvenirs perdus ({lost_count}) : {lost_names}
-
+{corruption_directive}
 Environ 100 mots. Décris comment la ville vit aujourd'hui sous le poids des pertes accumulées. Scènes de vie quotidienne concrètes. Ton journalistique mais poétique. Montre les effets combinés de tous les souvenirs disparus, pas seulement le dernier."""
+
+# Corruption directives injected into narrator prompts based on system_corruption_level
+CORRUPTION_NONE = ""
+
+CORRUPTION_WHISPER = (
+    "Directive subtile : Glisse une seule phrase où les urnes de la ville semblent "
+    "murmurer, ou un bulletin se consume tout seul. Étrangeté à peine perceptible — "
+    "un détail que seuls les lecteurs attentifs remarqueront."
+)
+
+CORRUPTION_MANIFEST = (
+    "Directive explicite : La Brume vote désormais. Mentionne que des ombres ont été "
+    "vues glissant des choix dans les fissures des murs la nuit. Le peuple pressent "
+    "qu'on lui vole ses décisions, mais n'ose pas le dire à voix haute."
+)
+
+CORRUPTION_FRACTURE = (
+    "Directive de rupture totale : La folie consume la narration elle-même. "
+    "Le narrateur peut répéter un mot deux fois de suite (bégaiement textuel). "
+    "Un fragment de code ou d'erreur système — 'ERR', 'NULL', '[SYS]' — "
+    "peut apparaître dans la bouche d'un personnage sans qu'il comprenne ce qu'il dit. "
+    "À la fin, le narrateur s'adresse brièvement à 'ceux qui regardent', "
+    "comme s'il devinait qu'il est observé depuis l'extérieur de l'histoire."
+)
 
 WORLD_DAY1_PROMPT = """Écris l'Acte 1 (Les Conséquences) du tout premier épisode, Jour 1.
 

@@ -72,11 +72,29 @@ def vote(req: VoteRequest):
 
 
 @router.post("/advance")
-def advance():
+def advance(render: bool = False, background_tasks=None):
     """
     Close voting, apply the winning choice, generate today's episode,
     and prepare tomorrow's dilemma. Call once per day (via cron or manually).
+
+    Pass ?render=true to also kick off a background video render job
+    (Pollinations images + music ducking + Discord notification).
     """
+    from fastapi import BackgroundTasks as _BT
+    from app.jobs.store import create_job
+    from app.jobs.worker import submit
+    from app.jobs.tasks import world_episode_task
+
+    if render:
+        job = create_job("world_episode", {})
+        submit(world_episode_task, job["id"], {})
+        return {
+            "status": "accepted",
+            "job_id": job["id"],
+            "status_url": f"/jobs/{job['id']}/status",
+            "message": "Le monde avance. La forge démarre en arrière-plan.",
+        }
+
     try:
         return advance_day()
     except RuntimeError as e:

@@ -13,7 +13,21 @@ from app.core.prompts import (
     WORLD_ACT1_PROMPT,
     WORLD_ACT2_PROMPT,
     WORLD_DAY1_PROMPT,
+    CORRUPTION_NONE,
+    CORRUPTION_WHISPER,
+    CORRUPTION_MANIFEST,
+    CORRUPTION_FRACTURE,
 )
+
+
+def _corruption_directive(corruption: float) -> str:
+    if corruption <= 0.0:
+        return CORRUPTION_NONE
+    if corruption <= 0.3:
+        return CORRUPTION_WHISPER
+    if corruption <= 0.6:
+        return CORRUPTION_MANIFEST
+    return CORRUPTION_FRACTURE
 
 
 _WORLD_EVENTS_BY_SANITY = [
@@ -106,6 +120,8 @@ def _act2_template(world: dict) -> str:
 def _generate_act1(world: dict, lost_today_id: str | None, day: int) -> str:
     sanity = world["collective_sanity"]
     lost_total = world.get("lost_memories", [])
+    corruption = world.get("system_corruption_level", 0.0)
+    directive = _corruption_directive(corruption)
 
     if day == 1:
         mem = get_memory("strawberry_taste")
@@ -123,9 +139,10 @@ def _generate_act1(world: dict, lost_today_id: str | None, day: int) -> str:
                 consequence=mem.get("consequence_fr", ""),
                 sanity=sanity,
                 lost_count=len(lost_total),
+                corruption_directive=directive,
             ),
             system=WORLD_NARRATOR_SYSTEM,
-            max_tokens=200,
+            max_tokens=250,
         )
     else:
         ai_text = None
@@ -139,6 +156,8 @@ def _generate_act2(world: dict, day: int) -> str:
     infra = world.get("infrastructure_level", 100)
     lost_total = world.get("lost_memories", [])
     lost_names = ", ".join(get_memory(m).get("name", m) for m in lost_total) or "aucun encore"
+    corruption = world.get("system_corruption_level", 0.0)
+    directive = _corruption_directive(corruption)
 
     ai_text = generate_text(
         WORLD_ACT2_PROMPT.format(
@@ -148,9 +167,10 @@ def _generate_act2(world: dict, day: int) -> str:
             infra=infra,
             lost_count=len(lost_total),
             lost_names=lost_names,
+            corruption_directive=directive,
         ),
         system=WORLD_NARRATOR_SYSTEM,
-        max_tokens=250,
+        max_tokens=300,
     )
     return ai_text or _act2_template(world)
 

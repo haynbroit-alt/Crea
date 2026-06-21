@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from app.core.config import settings
 from app.models.schemas import VideoRequest, VideoPlan
@@ -161,3 +161,127 @@ def get_hooks(request: VideoRequest):
 def get_seo(request: VideoRequest):
     seo = generate_seo(request.topic, language=request.language or "fr")
     return seo
+
+
+@app.get("/godmode", response_class=HTMLResponse)
+def god_mode_dashboard():
+    """
+    Retro CRT control terminal. Shows live world state, shadow_log, and a
+    one-click pipeline trigger. Do NOT share this URL publicly.
+    """
+    from app.world.state import get_world
+    from app.world.catalog import get_memory
+    from app.services.ai_client import is_available
+
+    world = get_world() or {}
+    day = world.get("day", "—")
+    sanity = world.get("collective_sanity", "—")
+    infra = world.get("infrastructure_level", "—")
+    wonder = world.get("wonder_level", "—")
+    corruption = world.get("system_corruption_level", 0.0)
+    voting_open = world.get("voting_open", False)
+    votes = world.get("vote_counts", {"A": 0, "B": 0})
+    lost = world.get("lost_memories", [])
+    shadow = world.get("shadow_log", [])
+    ai_on = is_available()
+
+    lost_html = "".join(
+        f"<span class='badge'>{get_memory(m).get('name', m)}</span>"
+        for m in lost
+    ) or "<span class='badge dim'>aucun</span>"
+
+    shadow_html = "".join(
+        f"<p class='log-line'>{line}</p>" for line in (shadow or ["Aucune anomalie détectée."])
+    )
+
+    dilemma = world.get("current_dilemma") or {}
+    opt_a = dilemma.get("option_A", {})
+    opt_b = dilemma.get("option_B", {})
+    dilemma_html = (
+        f"<p>A : Protéger <b>{opt_a.get('label_protect','?')}</b> / Sacrifier {opt_a.get('label_sacrifice','?')}</p>"
+        f"<p>B : Protéger <b>{opt_b.get('label_protect','?')}</b> / Sacrifier {opt_b.get('label_sacrifice','?')}</p>"
+        f"<p>Votes — A: {votes.get('A',0)} · B: {votes.get('B',0)} · "
+        f"Vote ouvert: {'OUI' if voting_open else 'NON'}</p>"
+    ) if dilemma else "<p>Aucun dilemme actif.</p>"
+
+    corruption_pct = f"{corruption * 100:.1f}%"
+    corruption_colour = "#ff3131" if corruption > 0.3 else ("#ffb000" if corruption > 0 else "#39ff14")
+    corruption_status = (
+        "FRACTURE — 4E MUR BRISÉ" if corruption > 0.6
+        else "VOTES FANTÔMES ACTIFS" if corruption > 0.3
+        else "INDICES NARRATIFS ACTIFS" if corruption > 0
+        else "INTÉGRITÉ INTACTE"
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>La Ville qui oublie — Terminal de Contrôle</title>
+  <style>
+    *{{box-sizing:border-box;margin:0;padding:0}}
+    body{{background:#0a0a12;color:#39ff14;font-family:'Courier New',monospace;padding:20px;
+         text-shadow:0 0 5px #39ff14;line-height:1.6}}
+    h1{{color:#ff3131;text-shadow:0 0 8px #ff3131;margin-bottom:4px;font-size:1.2em}}
+    h3{{margin:12px 0 6px;font-size:.95em;opacity:.8}}
+    .terminal{{border:2px solid #39ff14;padding:20px;background:#05050a;
+               box-shadow:0 0 20px rgba(57,255,20,.15);border-radius:4px;max-width:900px;margin:auto}}
+    hr{{border-color:#39ff14;opacity:.3;margin:12px 0}}
+    .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:14px 0}}
+    .card{{border:1px dashed #39ff14;padding:14px;background:rgba(57,255,20,.04);border-radius:3px}}
+    .card p{{margin:4px 0;font-size:.9em}}
+    .badge{{background:#1a1a2e;border:1px solid #39ff14;color:#39ff14;
+            padding:2px 7px;margin:2px;display:inline-block;font-size:.8em;border-radius:2px}}
+    .badge.dim{{opacity:.4}}
+    .log-box{{background:#000;border:1px solid #2a2a3a;height:140px;overflow-y:auto;
+              padding:10px;color:#ffb000;text-shadow:0 0 4px #ffb000;border-radius:3px;margin-top:6px}}
+    .log-line{{margin:3px 0;font-size:.8em}}
+    .big{{font-size:1.6em;font-weight:bold}}
+    .btn{{display:block;background:#ff3131;color:#000;border:none;padding:12px;width:100%;
+          font-family:'Courier New',monospace;font-weight:bold;cursor:pointer;font-size:1em;
+          box-shadow:0 0 12px #ff3131;border-radius:3px;margin-top:10px;text-transform:uppercase}}
+    .btn:hover{{background:#fff;box-shadow:0 0 20px #fff}}
+    .status-ok{{color:#39ff14}}.status-warn{{color:#ffb000}}.status-err{{color:#ff3131}}
+  </style>
+</head>
+<body>
+<div class="terminal">
+  <h1>[PROJET_BRUME] SYSTEM_OVERRIDE_CONNECTED</h1>
+  <p style="opacity:.6;font-size:.85em">Surveillance de simulation en temps réel · Ne pas partager · <a href="/docs" style="color:#39ff14">/docs</a></p>
+  <hr>
+
+  <div class="grid">
+    <div class="card">
+      <h3>📊 ÉTAT DU MONDE</h3>
+      <p>Jour : <b>{day}</b></p>
+      <p>Santé collective : <b>{sanity}/100</b></p>
+      <p>Émerveillement : <b>{wonder}/100</b></p>
+      <p>Infrastructure : <b>{infra}/100</b></p>
+      <p>Claude IA : <span class="{'status-ok' if ai_on else 'status-err'}">{'ACTIF' if ai_on else 'HORS LIGNE'}</span></p>
+    </div>
+    <div class="card">
+      <h3>⚠️ CORRUPTION SYSTÈME</h3>
+      <p class="big" style="color:{corruption_colour}">{corruption_pct}</p>
+      <p style="color:{corruption_colour}">{corruption_status}</p>
+    </div>
+    <div class="card">
+      <h3>🗳️ DILEMME ACTIF</h3>
+      {dilemma_html}
+    </div>
+  </div>
+
+  <h3>🧠 SOUVENIRS PERDUS ({len(lost)})</h3>
+  <div>{lost_html}</div>
+
+  <h3>🗄️ SHADOW LOG</h3>
+  <div class="log-box">{shadow_html}</div>
+
+  <form action="/world/advance?render=true" method="post"
+        onsubmit="this.querySelector('button').textContent='DÉCLENCHEMENT…';return true;">
+    <button class="btn" type="submit">☣️ FORCER L'AVANCE DU MONDE (pipeline complet)</button>
+  </form>
+</div>
+</body>
+</html>"""
+    return HTMLResponse(content=html, status_code=200)
