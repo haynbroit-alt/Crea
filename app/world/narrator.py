@@ -134,4 +134,10 @@ def generate_script(world: dict, lost_today_id: str | None = None) -> dict:
             "1:30": "ambiance inquiétante",
             "2:15": "note suspendue",
         },
+        "music_params": _music_params(world),
     }
+
+
+def _music_params(world: dict) -> dict:
+    from app.world.music import derive_music_params
+    return derive_music_params(world)

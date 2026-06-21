@@ -136,13 +136,14 @@ def enqueue_ase_episode(request: EpisodeRequest):
 
 
 @app.get("/download/{render_id}/{filename}")
-def download_video(render_id: str, filename: str):
+def download_file(render_id: str, filename: str):
     if ".." in render_id or ".." in filename:
         raise HTTPException(status_code=400, detail="Invalid path")
     path = os.path.join(settings.output_dir, render_id, filename)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path, media_type="video/mp4", filename=filename)
+    media = "audio/wav" if filename.endswith(".wav") else "video/mp4"
+    return FileResponse(path, media_type=media, filename=filename)
 
 
 @app.post("/hooks")

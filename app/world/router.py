@@ -6,6 +6,8 @@ from app.world.state import get_world, cast_vote, init_world
 from app.world.engine import advance_day
 from app.world.narrator import generate_script
 from app.world.catalog import MEMORIES
+from app.world.music import generate_music, derive_music_params
+from app.core.config import settings
 
 router = APIRouter(prefix="/world", tags=["World Engine — La Ville qui oublie"])
 
@@ -94,6 +96,39 @@ def list_memories():
         }
         for mid, mem in MEMORIES.items()
     ]
+
+
+@router.get("/music")
+def current_music_params():
+    """Music parameters derived from current world state (no file generated)."""
+    world = get_world()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not initialised")
+    return derive_music_params(world)
+
+
+@router.post("/music/render")
+def render_music():
+    """Generate a WAV file for the current world state. Returns download path."""
+    from fastapi.responses import FileResponse
+    world = get_world()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not initialised")
+    out_path = os.path.join(settings.output_dir, "world", f"day_{world['day']}_music.wav")
+    params = generate_music(world, out_path)
+    return {**params, "download_url": f"/download/world/day_{world['day']}_music.wav"}
+
+
+@router.get("/music/{day}")
+def music_by_day(day: int):
+    """Replay music params for a past episode (from stored episode data)."""
+    world = get_world()
+    if not world:
+        raise HTTPException(status_code=404, detail="World not initialised")
+    for ep in world["episodes"]:
+        if ep["day"] == day:
+            return ep.get("music_params", derive_music_params(world))
+    raise HTTPException(status_code=404, detail=f"No episode for day {day}")
 
 
 @router.delete("/reset")
