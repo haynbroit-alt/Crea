@@ -6,3 +6,4 @@ Pillow>=10.4.0
 moviepy>=2.0.0
 gTTS>=2.5.0
 scipy>=1.13.0
+anthropic>=0.40.0

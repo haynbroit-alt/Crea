@@ -7,6 +7,13 @@ Act 3 (1:45–2:15)  — New dilemma: the Mist returns, two memories threatened
 Act 4 (2:15–2:30)  — Call to vote
 """
 from app.world.catalog import get_memory, MEMORIES
+from app.services.ai_client import generate_text
+from app.core.prompts import (
+    WORLD_NARRATOR_SYSTEM,
+    WORLD_ACT1_PROMPT,
+    WORLD_ACT2_PROMPT,
+    WORLD_DAY1_PROMPT,
+)
 
 
 _WORLD_EVENTS_BY_SANITY = [
@@ -41,6 +48,113 @@ def _pick_event(scale: int, table: list[tuple]) -> str:
     return table[-1][1]
 
 
+def _sanity_label(sanity: int) -> str:
+    if sanity >= 80:
+        return "stable"
+    if sanity >= 60:
+        return "fragile"
+    if sanity >= 40:
+        return "en crise"
+    return "effondrée"
+
+
+def _wonder_label(wonder: int) -> str:
+    if wonder >= 70:
+        return "vivant"
+    if wonder >= 40:
+        return "s'effaçant"
+    return "éteint"
+
+
+def _act1_template(world: dict, lost_today_id: str | None, day: int) -> str:
+    lost_total = world.get("lost_memories", [])
+    if lost_today_id:
+        mem = get_memory(lost_today_id)
+        return (
+            f"Jour {day}. Cette nuit, la Brume a pris {mem.get('name', lost_today_id)}.\n\n"
+            + mem.get("consequence_fr", "La ville a changé. Les habitants le sentent sans pouvoir le nommer.")
+        )
+    if day == 1:
+        mem = get_memory("strawberry_taste")
+        return (
+            "Jour 1. Ce matin, quelque chose est différent.\n\n"
+            + mem.get("consequence_fr", "")
+            + "\n\nPersonne ne sait encore que c'est la Brume. Personne ne sait encore que ça vient de commencer."
+        )
+    lost_names = [get_memory(m).get("name", m) for m in lost_total[-2:]]
+    return (
+        f"Jour {day}. La liste de ce qui manque s'allonge encore.\n"
+        "La ville essaie de s'habituer. "
+        + (f"Depuis {len(lost_total)} nuit{'s' if len(lost_total) > 1 else ''}, " if lost_total else "")
+        + "quelque chose part sans retour."
+    )
+
+
+def _act2_template(world: dict) -> str:
+    sanity = world["collective_sanity"]
+    wonder = world["wonder_level"]
+    lost_total = world.get("lost_memories", [])
+    sanity_event = _pick_event(sanity, _WORLD_EVENTS_BY_SANITY)
+    wonder_event = _pick_event(wonder, _WONDER_EVENTS)
+    result = f"{sanity_event}\n\n{wonder_event}"
+    if len(lost_total) >= 3:
+        lost_names_all = [get_memory(m).get("name", m) for m in lost_total]
+        result += "\n\nLa ville a déjà perdu : " + ", ".join(lost_names_all) + "."
+    return result
+
+
+def _generate_act1(world: dict, lost_today_id: str | None, day: int) -> str:
+    sanity = world["collective_sanity"]
+    lost_total = world.get("lost_memories", [])
+
+    if day == 1:
+        mem = get_memory("strawberry_taste")
+        ai_text = generate_text(
+            WORLD_DAY1_PROMPT.format(consequence=mem.get("consequence_fr", "")),
+            system=WORLD_NARRATOR_SYSTEM,
+            max_tokens=200,
+        )
+    elif lost_today_id:
+        mem = get_memory(lost_today_id)
+        ai_text = generate_text(
+            WORLD_ACT1_PROMPT.format(
+                day=day,
+                lost_memory_name=mem.get("name", lost_today_id),
+                consequence=mem.get("consequence_fr", ""),
+                sanity=sanity,
+                lost_count=len(lost_total),
+            ),
+            system=WORLD_NARRATOR_SYSTEM,
+            max_tokens=200,
+        )
+    else:
+        ai_text = None
+
+    return ai_text or _act1_template(world, lost_today_id, day)
+
+
+def _generate_act2(world: dict, day: int) -> str:
+    sanity = world["collective_sanity"]
+    wonder = world["wonder_level"]
+    infra = world.get("infrastructure_level", 100)
+    lost_total = world.get("lost_memories", [])
+    lost_names = ", ".join(get_memory(m).get("name", m) for m in lost_total) or "aucun encore"
+
+    ai_text = generate_text(
+        WORLD_ACT2_PROMPT.format(
+            day=day,
+            sanity=sanity,
+            wonder=wonder,
+            infra=infra,
+            lost_count=len(lost_total),
+            lost_names=lost_names,
+        ),
+        system=WORLD_NARRATOR_SYSTEM,
+        max_tokens=250,
+    )
+    return ai_text or _act2_template(world)
+
+
 def generate_script(world: dict, lost_today_id: str | None = None) -> dict:
     day = world["day"]
     sanity = world["collective_sanity"]
@@ -48,44 +162,10 @@ def generate_script(world: dict, lost_today_id: str | None = None) -> dict:
     lost_total = world.get("lost_memories", [])
     dilemma = world.get("current_dilemma", {})
 
-    # ── Act 1 ─────────────────────────────────────────────────────────────────
-    if lost_today_id:
-        mem = get_memory(lost_today_id)
-        act1 = (
-            f"Jour {day}. Cette nuit, la Brume a pris {mem.get('name', lost_today_id)}.\n\n"
-            + mem.get("consequence_fr", "La ville a changé. Les habitants le sentent sans pouvoir le nommer.")
-        )
-    elif day == 1:
-        mem = get_memory("strawberry_taste")
-        act1 = (
-            f"Jour 1. Ce matin, quelque chose est différent.\n\n"
-            + mem.get("consequence_fr", "")
-            + "\n\nPersonne ne sait encore que c'est la Brume. Personne ne sait encore que ça vient de commencer."
-        )
-    else:
-        lost_names = [get_memory(m).get("name", m) for m in lost_total[-2:]]
-        act1 = (
-            f"Jour {day}. La liste de ce qui manque s'allonge encore.\n"
-            + "La ville essaie de s'habituer. "
-            + (f"Depuis {len(lost_total)} nuit{'s' if len(lost_total) > 1 else ''}, " if lost_total else "")
-            + "quelque chose part sans retour."
-        )
+    act1 = _generate_act1(world, lost_today_id, day)
+    act2 = _generate_act2(world, day)
 
-    # ── Act 2 ─────────────────────────────────────────────────────────────────
-    sanity_event = _pick_event(sanity, _WORLD_EVENTS_BY_SANITY)
-    wonder_event = _pick_event(wonder, _WONDER_EVENTS)
-
-    if len(lost_total) >= 3:
-        lost_names_all = [get_memory(m).get("name", m) for m in lost_total]
-        inventory = "La ville a déjà perdu : " + ", ".join(lost_names_all) + "."
-    else:
-        inventory = ""
-
-    act2 = f"{sanity_event}\n\n{wonder_event}"
-    if inventory:
-        act2 += f"\n\n{inventory}"
-
-    # ── Act 3 ─────────────────────────────────────────────────────────────────
+    # ── Act 3 — always template (exact vote options required) ────────────────
     if dilemma:
         opt_a = dilemma.get("option_A", {})
         opt_b = dilemma.get("option_B", {})
@@ -102,7 +182,7 @@ def generate_script(world: dict, lost_today_id: str | None = None) -> dict:
     else:
         act3 = "La Brume hésite ce soir. Le Conseil attend."
 
-    # ── Act 4 ─────────────────────────────────────────────────────────────────
+    # ── Act 4 — always template (call to vote) ───────────────────────────────
     if dilemma and dilemma.get("option_A") and dilemma.get("option_B"):
         act4 = _CALL_TO_VOTE_FR.format(
             label_A=dilemma["option_A"].get("label_protect", "?"),
@@ -135,9 +215,15 @@ def generate_script(world: dict, lost_today_id: str | None = None) -> dict:
             "2:15": "note suspendue",
         },
         "music_params": _music_params(world),
+        "ai_generated": _is_ai_available(),
     }
 
 
 def _music_params(world: dict) -> dict:
     from app.world.music import derive_music_params
     return derive_music_params(world)
+
+
+def _is_ai_available() -> bool:
+    from app.services.ai_client import is_available
+    return is_available()
