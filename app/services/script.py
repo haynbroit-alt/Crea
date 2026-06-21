@@ -1,5 +1,8 @@
+import json
 import random
 from app.models.schemas import Script
+from app.services.ai_client import generate_text
+from app.core.prompts import SCRIPT_AI_PROMPT
 
 
 HOOKS_FR = [
@@ -53,13 +56,36 @@ CONCLUSIONS_EN = [
 ]
 
 
-def generate_script(topic: str, language: str = "fr", style: str = "viral") -> Script:
+def _ai_generate_script(topic: str, language: str, style: str) -> Script | None:
+    lang_name = "français" if language == "fr" else "anglais"
+    raw = generate_text(
+        SCRIPT_AI_PROMPT.format(topic=topic, style=style, lang_name=lang_name),
+        max_tokens=600,
+    )
+    if not raw:
+        return None
+    try:
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        data = json.loads(raw[start:end])
+        return Script(
+            hook=str(data["hook"]),
+            body=[str(s) for s in data["body"][:7]],
+            conclusion=str(data["conclusion"]),
+        )
+    except Exception:
+        return None
+
+
+def _template_generate_script(topic: str, language: str) -> Script:
     hooks = HOOKS_FR if language == "fr" else HOOKS_EN
     body_pool = BODY_FR if language == "fr" else BODY_EN
     conclusions = CONCLUSIONS_FR if language == "fr" else CONCLUSIONS_EN
-
     hook = random.choice(hooks).format(topic=topic)
     body = [s.format(topic=topic) for s in random.sample(body_pool, min(5, len(body_pool)))]
     conclusion = random.choice(conclusions)
-
     return Script(hook=hook, body=body, conclusion=conclusion)
+
+
+def generate_script(topic: str, language: str = "fr", style: str = "viral") -> Script:
+    return _ai_generate_script(topic, language, style) or _template_generate_script(topic, language)

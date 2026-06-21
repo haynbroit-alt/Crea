@@ -68,7 +68,8 @@ def home():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    from app.services.ai_client import is_available
+    return {"status": "ok", "ai_narrative": is_available()}
 
 
 @app.post("/generate", response_model=VideoPlan)
