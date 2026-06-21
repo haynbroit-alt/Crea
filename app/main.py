@@ -18,6 +18,7 @@ from app.jobs.worker import submit, shutdown as shutdown_workers
 from app.jobs.tasks import render_video_task, ase_episode_task
 from app.jobs.router import router as jobs_router
 from app.ase.router import router as ase_router
+from app.world.router import router as world_router
 from app.utils.helpers import slugify
 
 
@@ -45,6 +46,7 @@ app = FastAPI(
 
 app.include_router(jobs_router)
 app.include_router(ase_router)
+app.include_router(world_router)
 
 app.add_middleware(
     CORSMiddleware,
