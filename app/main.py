@@ -15,12 +15,15 @@ from app.services.image_gen import create_scene_image
 from app.services.voice import generate_voice
 from app.services.video_editor import assemble_video
 from app.utils.helpers import slugify
+from app.ase.router import router as ase_router
 
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="Backend API for AI-powered short-form video generation",
 )
+
+app.include_router(ase_router)
 
 app.add_middleware(
     CORSMiddleware,
