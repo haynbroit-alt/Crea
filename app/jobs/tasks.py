@@ -59,6 +59,83 @@ def render_video_task(job_id: str, params: dict) -> None:
         )
 
 
+def world_episode_task(job_id: str, params: dict) -> None:
+    """
+    Full pipeline for a world episode:
+    advance state → narrate (Claude) → Pollinations images → voice → video + music ducking → Discord notify.
+    """
+    from app.world.engine import advance_day
+    from app.world.state import get_world
+    from app.world.music import generate_music
+    from app.services.image_generator import generate_scene_image
+    from app.services.voice import generate_voice
+    from app.services.video_editor import assemble_video
+    from app.services.notifier import notify_discord
+
+    update_job(job_id, status=JobStatus.PROCESSING, started_at=datetime.now(timezone.utc).isoformat())
+    try:
+        episode = advance_day()
+        world = get_world()
+        day = episode["day"]
+        render_id = uuid.uuid4().hex[:8]
+        job_dir = os.path.join(settings.output_dir, f"world_ep{day}_{render_id}")
+
+        # Music WAV (procedural, matches world mood)
+        music_path = os.path.join(settings.output_dir, "world", f"day_{day}_music.wav")
+        os.makedirs(os.path.dirname(music_path), exist_ok=True)
+        generate_music(world, music_path)
+
+        # Images — one per act (Pollinations → Pillow fallback)
+        acts = episode.get("acts", {})
+        scene_specs = [
+            (acts.get("act1", {}).get("text", ""), True),
+            (acts.get("act2", {}).get("text", ""), False),
+            (acts.get("act3", {}).get("text", ""), False),
+        ]
+        image_paths = [
+            generate_scene_image(text[:300], i, output_dir=job_dir, is_hook=is_hook)
+            for i, (text, is_hook) in enumerate(scene_specs)
+            if text
+        ]
+
+        # Voice — full episode narration
+        full_text = episode.get("full_script", f"Jour {day}.")
+        voice_path = generate_voice(
+            full_text,
+            language="fr",
+            output_path=os.path.join(job_dir, "voice.mp3"),
+        )
+
+        # Video assembly with music ducking (12% volume under voice)
+        durations = [45.0, 60.0, 30.0][: len(image_paths)]
+        filename = f"world_ep{day}.mp4"
+        output_path = os.path.join(job_dir, filename)
+        assemble_video(image_paths, durations, voice_path, output_path, music_path=music_path)
+
+        # Discord notification
+        call_to_vote = acts.get("act4", {}).get("text", f"Épisode {day} en ligne.")
+        notify_discord(day, output_path, call_to_vote)
+
+        update_job(
+            job_id,
+            status=JobStatus.COMPLETED,
+            completed_at=datetime.now(timezone.utc).isoformat(),
+            result={
+                "day": day,
+                "render_id": render_id,
+                "download_url": f"/download/world_ep{day}_{render_id}/{filename}",
+                "episode": episode,
+            },
+        )
+    except Exception as exc:
+        update_job(
+            job_id,
+            status=JobStatus.FAILED,
+            completed_at=datetime.now(timezone.utc).isoformat(),
+            error=str(exc),
+        )
+
+
 def ase_episode_task(job_id: str, params: dict) -> None:
     from app.ase.memory import get_story, add_episode
     from app.ase.episode_generator import generate_episode
