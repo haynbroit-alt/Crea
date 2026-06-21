@@ -9,3 +9,26 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+
+  - type: cron
+    name: world-daily-advance
+    env: python
+    region: frankfurt
+    plan: free
+    schedule: "0 18 * * *"
+    buildCommand: pip install requests
+    startCommand: >
+      python -c "
+      import os, requests, sys;
+      url = os.environ.get('APP_URL','').rstrip('/') + '/world/advance?render=true';
+      r = requests.post(url, timeout=30);
+      print(r.status_code, r.text[:200]);
+      sys.exit(0 if r.status_code < 400 else 1)
+      "
+    envVars:
+      - key: APP_URL
+        sync: false

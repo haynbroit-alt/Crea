@@ -10,6 +10,18 @@ _DB = os.environ.get("WORLD_DB_PATH", "data/world.json")
 
 
 def _load() -> dict:
+    from app.services.supabase_store import load_world as _sb_load, is_configured as _sb_ok
+    if _sb_ok():
+        try:
+            remote = _sb_load()
+            if remote:
+                # Refresh local cache so restarts are fast
+                os.makedirs(os.path.dirname(_DB) or ".", exist_ok=True)
+                with open(_DB, "w", encoding="utf-8") as f:
+                    json.dump(remote, f, indent=2, ensure_ascii=False)
+                return remote
+        except Exception:
+            pass
     if os.path.exists(_DB):
         with open(_DB, encoding="utf-8") as f:
             return json.load(f)
@@ -20,6 +32,12 @@ def _save(world: dict) -> None:
     os.makedirs(os.path.dirname(_DB) or ".", exist_ok=True)
     with open(_DB, "w", encoding="utf-8") as f:
         json.dump(world, f, indent=2, ensure_ascii=False)
+    from app.services.supabase_store import save_world as _sb_save, is_configured as _sb_ok
+    if _sb_ok():
+        try:
+            _sb_save(world)
+        except Exception:
+            pass
 
 
 def get_world() -> dict:

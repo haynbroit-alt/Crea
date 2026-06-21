@@ -183,6 +183,7 @@ def god_mode_dashboard():
         pass
     from app.world.catalog import get_memory
     from app.services.ai_client import is_available
+    from app.services.supabase_store import is_configured as sb_configured
 
     world = get_world() or {}
     day = world.get("day", "—")
@@ -195,6 +196,7 @@ def god_mode_dashboard():
     lost = world.get("lost_memories", [])
     shadow = world.get("shadow_log", [])
     ai_on = is_available()
+    sb_on = sb_configured()
 
     lost_html = "".join(
         f"<span class='badge'>{get_memory(m).get('name', m)}</span>"
@@ -273,6 +275,7 @@ def god_mode_dashboard():
       <p>Émerveillement : <b>{wonder}/100</b></p>
       <p>Infrastructure : <b>{infra}/100</b></p>
       <p>Claude IA : <span class="{'status-ok' if ai_on else 'status-err'}">{'ACTIF' if ai_on else 'HORS LIGNE'}</span></p>
+      <p>Supabase : <span class="{'status-ok' if sb_on else 'status-warn'}">{'CONNECTÉ' if sb_on else 'LOCAL ONLY'}</span></p>
     </div>
     <div class="card">
       <h3>⚠️ CORRUPTION SYSTÈME</h3>
