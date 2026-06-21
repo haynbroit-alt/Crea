@@ -1,3 +1,4 @@
+import json
 import os
 import threading
 from contextlib import asynccontextmanager
@@ -5,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.models.schemas import VideoRequest, VideoPlan
@@ -43,6 +45,9 @@ app = FastAPI(
     description="Backend API for AI-powered short-form video generation",
     lifespan=lifespan,
 )
+
+os.makedirs(settings.output_dir, exist_ok=True)
+app.mount("/media", StaticFiles(directory=settings.output_dir), name="media")
 
 app.include_router(jobs_router)
 app.include_router(ase_router)
@@ -170,8 +175,15 @@ def god_mode_dashboard():
     one-click pipeline trigger. Do NOT share this URL publicly.
     """
     from app.world.state import get_world
+    _last_ep: dict = {}
+    try:
+        with open("data/last_episode.json", encoding="utf-8") as _f:
+            _last_ep = json.load(_f)
+    except Exception:
+        pass
     from app.world.catalog import get_memory
     from app.services.ai_client import is_available
+    from app.services.supabase_store import is_configured as sb_configured
 
     world = get_world() or {}
     day = world.get("day", "—")
@@ -184,6 +196,7 @@ def god_mode_dashboard():
     lost = world.get("lost_memories", [])
     shadow = world.get("shadow_log", [])
     ai_on = is_available()
+    sb_on = sb_configured()
 
     lost_html = "".join(
         f"<span class='badge'>{get_memory(m).get('name', m)}</span>"
@@ -203,6 +216,9 @@ def god_mode_dashboard():
         f"<p>Votes — A: {votes.get('A',0)} · B: {votes.get('B',0)} · "
         f"Vote ouvert: {'OUI' if voting_open else 'NON'}</p>"
     ) if dilemma else "<p>Aucun dilemme actif.</p>"
+
+    last_ep_url = _last_ep.get("url", "")
+    last_ep_day = _last_ep.get("day", "—")
 
     corruption_pct = f"{corruption * 100:.1f}%"
     corruption_colour = "#ff3131" if corruption > 0.3 else ("#ffb000" if corruption > 0 else "#39ff14")
@@ -259,6 +275,7 @@ def god_mode_dashboard():
       <p>Émerveillement : <b>{wonder}/100</b></p>
       <p>Infrastructure : <b>{infra}/100</b></p>
       <p>Claude IA : <span class="{'status-ok' if ai_on else 'status-err'}">{'ACTIF' if ai_on else 'HORS LIGNE'}</span></p>
+      <p>Supabase : <span class="{'status-ok' if sb_on else 'status-warn'}">{'CONNECTÉ' if sb_on else 'LOCAL ONLY'}</span></p>
     </div>
     <div class="card">
       <h3>⚠️ CORRUPTION SYSTÈME</h3>
@@ -269,6 +286,9 @@ def god_mode_dashboard():
       <h3>🗳️ DILEMME ACTIF</h3>
       {dilemma_html}
     </div>
+  </div>
+
+  {'<div class="card" style="grid-column:span 3"><h3>🎬 DERNIER ÉPISODE — JOUR ' + str(last_ep_day) + '</h3><video controls style="width:100%;border:1px solid #39ff14;background:#000;margin-top:8px;border-radius:3px"><source src="' + last_ep_url + '" type="video/mp4">Votre navigateur ne supporte pas la lecture.</video></div>' if last_ep_url else '<div class="card" style="opacity:.4"><h3>🎬 AUCUN ÉPISODE RENDU</h3><p>Cliquez sur le bouton rouge pour générer le premier épisode.</p></div>'}
   </div>
 
   <h3>🧠 SOUVENIRS PERDUS ({len(lost)})</h3>

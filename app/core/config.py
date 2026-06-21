@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     output_dir: str = "output"
     anthropic_api_key: str | None = None
     claude_model: str = "claude-haiku-4-5-20251001"
+    supabase_url: str | None = None
+    supabase_key: str | None = None
 
     class Config:
         env_file = ".env"

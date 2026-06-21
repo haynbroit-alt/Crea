@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 from datetime import datetime, timezone
@@ -116,9 +117,19 @@ def world_episode_task(job_id: str, params: dict) -> None:
         output_path = os.path.join(job_dir, filename)
         assemble_video(image_paths, durations, voice_path, output_path, music_path=music_path)
 
-        # Discord notification
+        # Discord notification (no-op if DISCORD_WEBHOOK_URL not set)
         call_to_vote = acts.get("act4", {}).get("text", f"Épisode {day} en ligne.")
         notify_discord(day, output_path, call_to_vote)
+
+        # Persist latest episode URL for /godmode video player
+        media_url = f"/media/world_ep{day}_{render_id}/{filename}"
+        _last_ep = {"day": day, "url": media_url, "render_id": render_id}
+        try:
+            os.makedirs("data", exist_ok=True)
+            with open("data/last_episode.json", "w", encoding="utf-8") as _f:
+                json.dump(_last_ep, _f)
+        except Exception:
+            pass
 
         update_job(
             job_id,
@@ -127,6 +138,7 @@ def world_episode_task(job_id: str, params: dict) -> None:
             result={
                 "day": day,
                 "render_id": render_id,
+                "media_url": media_url,
                 "download_url": f"/download/world_ep{day}_{render_id}/{filename}",
                 "episode": episode,
             },
