@@ -25,12 +25,15 @@ def assemble_video(
     clips = [_make_clip(p, d) for p, d in zip(image_paths, durations)]
     video = concatenate_videoclips(clips, method="compose")
 
-    if voice_path and os.path.exists(voice_path):
-        audio = AudioFileClip(voice_path)
-        max_dur = max(video.duration, audio.duration)
-        video = video.with_duration(max_dur)
-        audio = audio.with_duration(min(audio.duration, max_dur))
-        video = video.with_audio(audio)
+    if voice_path and os.path.exists(voice_path) and os.path.getsize(voice_path) > 0:
+        try:
+            audio = AudioFileClip(voice_path)
+            max_dur = max(video.duration, audio.duration)
+            video = video.with_duration(max_dur)
+            audio = audio.with_duration(min(audio.duration, max_dur))
+            video = video.with_audio(audio)
+        except Exception:
+            pass  # render without audio if file is corrupt/empty
 
     video.write_videofile(
         output_path,
