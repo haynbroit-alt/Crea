@@ -4,6 +4,10 @@ __pycache__/
 .env
 .venv/
 venv/
+output/*/
 output/*.mp4
 output/*.mp3
+data/jobs.json
+data/stories.json
+data/world.json
 .DS_Store
