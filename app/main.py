@@ -331,7 +331,9 @@ def god_mode_dashboard():
     <p id="cmd-out" style="font-size:.78em;opacity:.6;margin-top:6px;min-height:1.2em"></p>
   </div>
 </div>
-""" + _GODMODE_SCRIPT.replace("__LAST_EPISODE__", last_ep_json) + """
+""" + _GODMODE_SCRIPT.replace("__LAST_EPISODE__", last_ep_json).replace(
+        "__SECRET__", json.dumps(_residue_key(world), ensure_ascii=False)
+    ) + """
 </body>
 </html>"""
     return HTMLResponse(content=html, status_code=200)
@@ -389,18 +391,23 @@ __btn.addEventListener('click', async function () {
     }
 });
 
-// ── L'EFFET PARADOXE : le code enfoui dans l'oubli ouvre la faille ──
+// ── L'EFFET PARADOXE : la clé enfouie dans l'oubli ouvre la faille ──
+// __SECRET__ est dérivée de l'état du monde côté serveur (zéro stockage) — la
+// même clé est semée en fragments dans /reveil. Elle mute quand la ville oublie.
+const __SECRET = __norm(__SECRET__);
 const __cmd = document.getElementById('cmd');
 const __out = document.getElementById('cmd-out');
-const __norm = s => (s||"").toUpperCase().replace(/[^A-Z]/g, "");
+function __norm(s){ return (s||"").toUpperCase().replace(/[^A-Z]/g, ""); }
 if (__cmd) {
     __cmd.addEventListener('keydown', function (e) {
         if (e.key !== 'Enter') return;
         const v = __norm(__cmd.value);
-        if (v === 'SOUVIENSTOI') {
+        if (__SECRET && v === __SECRET) {
             triggerParadox();
         } else if (v === 'AIDE' || v === 'HELP') {
-            __out.textContent = "rassemble les cicatrices laissées par les souvenirs effacés dans /reveil.";
+            __out.textContent = __SECRET
+                ? ("rassemble les " + __SECRET.length + " cicatrices laissées par les souvenirs effacés dans /reveil, puis remets-les dans l'ordre.")
+                : "la ville n'a encore rien oublié. aucune cicatrice à rassembler.";
         } else if (v.length) {
             __out.textContent = "commande inconnue. la Brume n'a rien retenu.";
             __cmd.value = "";
@@ -432,6 +439,37 @@ function triggerParadox() {
     setTimeout(function () { location.href = "/paradox"; }, 2400);
 }
 </script>"""
+
+
+def _residue_key(world: dict) -> str:
+    """
+    Derive the ghost-residue ARG key from world state — deterministically, with
+    zero stored bytes. One letter per lost memory, drawn from that memory's own
+    name, so the key is literally assembled from the debris of what the city
+    forgot. Length == number of lost memories → always solvable (each death
+    reveals exactly one letter). The same JSON yields the same key on /reveil
+    (which seeds the fragments) and /godmode (which validates), and it rotates
+    as the world advances.
+    """
+    import unicodedata
+    from app.world.catalog import get_memory
+
+    def _ascii_upper(s: str) -> str:
+        no_accent = "".join(
+            c for c in unicodedata.normalize("NFD", s)
+            if unicodedata.category(c) != "Mn"
+        )
+        return "".join(c for c in no_accent.upper() if "A" <= c <= "Z")
+
+    day = world.get("day", 0)
+    letters = []
+    for i, mid in enumerate(world.get("lost_memories", [])):
+        alpha = _ascii_upper(get_memory(mid).get("name", mid)) or "BRUME"
+        h = 2166136261
+        for ch in f"{mid}|{day}|{i}":               # deterministic per memory/day
+            h = ((h ^ ord(ch)) * 16777619) & 0xFFFFFFFF
+        letters.append(alpha[h % len(alpha)])
+    return "".join(letters)
 
 
 def _reveil_payload() -> dict:
@@ -479,6 +517,7 @@ def _reveil_payload() -> dict:
         "music": music,
         "lost": lost,
         "alive": alive,
+        "secret": _residue_key(world),
         "initialised": bool(world),
     }
 
@@ -828,18 +867,21 @@ const decayers=[]; // {el, chars, alive, saved}
 let savedOne=false;
 
 /* ── RÉSIDUS FANTÔMES (ARG) : l'oubli laisse des cicatrices ── */
-const SECRET="SOUVIENS-TOI";
-const _frag=SECRET.replace(/[^A-Z]/gi,"").split("");
-let _fragIdx=0, _residue="";
-function revealFragment(memName){
-  if(_fragIdx>=_frag.length) return;
-  const ch=_frag[_fragIdx++]; _residue+=ch;
-  console.log("%c[RÉSIDU] « "+memName+" » a laissé une cicatrice : "+ch,
+// La clé est dérivée de l'état du monde (DATA.secret) : une lettre par souvenir,
+// tirée de son propre nom. Chaque mort révèle SA lettre, à SA position. Rassemblées
+// dans l'ordre, elles ouvrent la faille /godmode. Zéro octet stocké côté serveur.
+const SECRET=(DATA.secret||"");
+const _collected=new Array(SECRET.length).fill(null);
+function revealFragment(pos, memName){
+  if(pos<0 || pos>=SECRET.length || _collected[pos]!==null) return;
+  const ch=SECRET[pos]; _collected[pos]=ch;
+  document.body.dataset["residu"+(pos+1)]=ch;
+  console.log("%c[RÉSIDU] cicatrice "+(pos+1)+"/"+SECRET.length+
+              " — « "+memName+" » a laissé : "+ch,
               "color:#39ff14;font-family:monospace;text-shadow:0 0 4px #39ff14");
-  document.body.dataset["residu"+_fragIdx]=ch;
-  if(_fragIdx===_frag.length){
-    console.log("%c[ARCHIVE] fragments rassemblés. la Brume a tout oublié — sauf ceci :\n  »  "
-      +_residue+"  «\ntape-le dans le terminal /godmode pour ouvrir la faille.",
+  if(_collected.every(x=>x!==null)){
+    console.log("%c[ARCHIVE] toutes les cicatrices sont là. remises dans l'ordre :\n  »  "
+      +_collected.join("")+"  «\ntape ceci dans le terminal /godmode pour ouvrir la faille.",
       "color:#ffb000;font-family:monospace;font-size:14px;text-shadow:0 0 6px #ffb000");
   }
 }
@@ -866,7 +908,8 @@ function renderArchive(){
   let idx=0;
   (function addOne(){
     if(idx>=DATA.lost.length){ setTimeout(armSave, 1200); return; }
-    const m=DATA.lost[idx];
+    const pos=idx;                         // capture this memory's key position
+    const m=DATA.lost[pos];
     const card=document.createElement('div'); card.className='mem'; card.dataset.id=m.id;
     card.style.setProperty('--m', (0.4 + Math.random()*1.2).toFixed(2));
     const tierTxt=['','sensoriel','social','existentiel'][m.tier]||'';
@@ -877,7 +920,7 @@ function renderArchive(){
     card.addEventListener('mouseenter', ()=>cry(card));
     typewrite(body, m.consequence, ()=>{
       decayers.push({el:body, chars:m.consequence.split(""), saved:false,
-                     card:card, name:m.name, dead:false});
+                     card:card, name:m.name, dead:false, pos:pos});
     });
     idx++;
     setTimeout(addOne, Math.min(m.consequence.length*22+900, 5200));
@@ -905,7 +948,7 @@ function decayTick(){
       const live=[]; for(let k=0;k<d.chars.length;k++){ if(d.chars[k]!==''&&d.chars[k]!==' ') live.push(k); }
       if(live.length===0){
         d.card.classList.add('gone');
-        if(!d.dead){ d.dead=true; revealFragment(d.name||'?'); }
+        if(!d.dead){ d.dead=true; revealFragment(d.pos, d.name||'?'); }
         return;
       }
       const j=live[Math.floor(Math.random()*live.length)];
