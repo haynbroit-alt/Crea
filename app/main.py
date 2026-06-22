@@ -175,12 +175,6 @@ def god_mode_dashboard():
     one-click pipeline trigger. Do NOT share this URL publicly.
     """
     from app.world.state import get_world
-    _last_ep: dict = {}
-    try:
-        with open("data/last_episode.json", encoding="utf-8") as _f:
-            _last_ep = json.load(_f)
-    except Exception:
-        pass
     from app.world.catalog import get_memory
     from app.services.ai_client import is_available
     from app.services.supabase_store import is_configured as sb_configured
@@ -217,8 +211,15 @@ def god_mode_dashboard():
         f"Vote ouvert: {'OUI' if voting_open else 'NON'}</p>"
     ) if dilemma else "<p>Aucun dilemme actif.</p>"
 
-    last_ep_url = _last_ep.get("url", "")
-    last_ep_day = _last_ep.get("day", "—")
+    # Latest episode for the zero-RAM CRT player (text + Pollinations URL).
+    episodes = world.get("episodes", [])
+    last_ep = episodes[-1] if episodes else {}
+    last_ep_day = last_ep.get("day", "—")
+    last_ep_text = last_ep.get("narrative_text") or last_ep.get("full_script", "")
+    last_ep_image = last_ep.get("image_url", "")
+    last_ep_json = json.dumps(
+        {"text": last_ep_text, "image": last_ep_image}, ensure_ascii=False
+    ).replace("<", "\\u003c")
 
     corruption_pct = f"{corruption * 100:.1f}%"
     corruption_colour = "#ff3131" if corruption > 0.3 else ("#ffb000" if corruption > 0 else "#39ff14")
@@ -288,7 +289,25 @@ def god_mode_dashboard():
     </div>
   </div>
 
-  {'<div class="card" style="grid-column:span 3"><h3>🎬 DERNIER ÉPISODE — JOUR ' + str(last_ep_day) + '</h3><video controls style="width:100%;border:1px solid #39ff14;background:#000;margin-top:8px;border-radius:3px"><source src="' + last_ep_url + '" type="video/mp4">Votre navigateur ne supporte pas la lecture.</video></div>' if last_ep_url else '<div class="card" style="opacity:.4"><h3>🎬 AUCUN ÉPISODE RENDU</h3><p>Cliquez sur le bouton rouge pour générer le premier épisode.</p></div>'}
+  </div>
+
+  <div style="border:2px solid #39ff14;background:#050d05;padding:20px;margin-top:20px;
+              box-shadow:0 0 15px rgba(57,255,20,.2);position:relative;border-radius:4px">
+    <div style="position:absolute;top:0;left:0;width:100%;height:100%;
+                background:linear-gradient(rgba(18,16,16,0) 50%,rgba(0,0,0,.25) 50%),
+                           linear-gradient(90deg,rgba(255,0,0,.06),rgba(0,255,0,.02),rgba(0,0,255,.06));
+                background-size:100% 4px,6px 100%;pointer-events:none"></div>
+    <h3 style="color:#39ff14;font-family:monospace;margin-top:0">
+      📟 TRANSMISSION VISUELLE GÉNÉRATIVE — JOUR {last_ep_day}
+    </h3>
+    <div id="wrapper-image" style="width:100%;max-height:350px;overflow:hidden;
+                                   border:1px solid #39ff14;margin-bottom:15px;background:#000">
+      <img id="crt-image" src="" alt=""
+           style="width:100%;height:auto;display:none;
+                  filter:sepia(.2) contrast(1.2) brightness(.9);opacity:.85">
+    </div>
+    <div id="crt-text" style="color:#39ff14;font-family:'Courier New',monospace;font-size:1.1em;
+                              line-height:1.5;min-height:100px;white-space:pre-wrap"></div>
   </div>
 
   <h3>🧠 SOUVENIRS PERDUS ({len(lost)})</h3>
@@ -297,11 +316,63 @@ def god_mode_dashboard():
   <h3>🗄️ SHADOW LOG</h3>
   <div class="log-box">{shadow_html}</div>
 
-  <form action="/world/advance?render=true" method="post"
-        onsubmit="this.querySelector('button').textContent='DÉCLENCHEMENT…';return true;">
-    <button class="btn" type="submit">☣️ FORCER L'AVANCE DU MONDE (pipeline complet)</button>
-  </form>
+  <button class="btn" id="advance-btn" type="button">☣️ FORCER L'AVANCE DU MONDE (rendu zéro RAM)</button>
 </div>
+""" + _GODMODE_SCRIPT.replace("__LAST_EPISODE__", last_ep_json) + """
 </body>
 </html>"""
     return HTMLResponse(content=html, status_code=200)
+
+
+# Client-side CRT player + zero-RAM advance trigger. Kept outside the f-string
+# so its braces don't collide with f-string formatting. __LAST_EPISODE__ is
+# replaced with the latest episode JSON ({"text": ..., "image": ...}).
+_GODMODE_SCRIPT = """
+<script>
+function playLatestEpisode(narrativeText, imageUrl) {
+    const textContainer = document.getElementById('crt-text');
+    const imageElement = document.getElementById('crt-image');
+
+    if (imageUrl) {
+        imageElement.src = imageUrl;
+        imageElement.style.display = 'block';
+    }
+
+    textContainer.innerHTML = "";
+    let i = 0;
+    function typeWriter() {
+        if (i < narrativeText.length) {
+            textContainer.innerHTML += narrativeText.charAt(i);
+            i++;
+            setTimeout(typeWriter, 30);
+        }
+    }
+    typeWriter();
+}
+
+const __episode = __LAST_EPISODE__;
+if (__episode && __episode.text) {
+    playLatestEpisode(__episode.text, __episode.image);
+} else {
+    document.getElementById('crt-text').textContent =
+        "Aucune transmission. Cliquez sur le bouton rouge pour générer le premier épisode.";
+}
+
+const __btn = document.getElementById('advance-btn');
+__btn.addEventListener('click', async function () {
+    __btn.disabled = true;
+    __btn.textContent = "DÉCLENCHEMENT…";
+    try {
+        const resp = await fetch('/world/advance', { method: 'POST' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const episode = await resp.json();
+        const text = episode.narrative_text || episode.full_script || "";
+        playLatestEpisode(text, episode.image_url || "");
+        __btn.textContent = "✅ MONDE AVANCÉ — RECHARGEMENT…";
+        setTimeout(function () { location.reload(); }, Math.min(text.length * 30 + 1500, 8000));
+    } catch (err) {
+        __btn.textContent = "❌ ERREUR : " + err.message;
+        __btn.disabled = false;
+    }
+});
+</script>"""
