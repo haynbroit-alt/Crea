@@ -15,17 +15,18 @@ services:
         sync: false
 
   - type: cron
-    name: world-daily-advance
+    name: world-publish-shorts
     env: python
     region: frankfurt
     plan: free
-    schedule: "0 18 * * *"
+    # 09:00 and 18:00 UTC → 2 YouTube Shorts per day
+    schedule: "0 9,18 * * *"
     buildCommand: pip install requests
     startCommand: >
       python -c "
       import os, requests, sys;
-      url = os.environ.get('APP_URL','').rstrip('/') + '/world/advance?render=true';
-      r = requests.post(url, timeout=30);
+      url = os.environ.get('APP_URL','').rstrip('/') + '/world/publish';
+      r = requests.post(url, timeout=60);
       print(r.status_code, r.text[:200]);
       sys.exit(0 if r.status_code < 400 else 1)
       "

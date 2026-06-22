@@ -10,4 +10,6 @@ output/*.mp3
 data/jobs.json
 data/stories.json
 data/world.json
+data/last_episode.json
+data/last_publish.json
 .DS_Store

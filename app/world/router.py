@@ -101,6 +101,27 @@ def advance(render: bool = False, background_tasks=None):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/publish")
+def publish():
+    """
+    Advance the world and publish the episode as a branded YouTube Short
+    (ffmpeg render + upload). Runs in the background; poll the job status.
+    Designed to be called twice a day by the cron service.
+    """
+    from app.jobs.store import create_job
+    from app.jobs.worker import submit
+    from app.jobs.tasks import world_publish_task
+
+    job = create_job("world_publish", {})
+    submit(world_publish_task, job["id"], {})
+    return {
+        "status": "accepted",
+        "job_id": job["id"],
+        "status_url": f"/jobs/{job['id']}/status",
+        "message": "La forge tourne : épisode → vidéo → YouTube Short.",
+    }
+
+
 @router.get("/memories")
 def list_memories():
     world = get_world()
