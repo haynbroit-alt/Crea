@@ -10,6 +10,21 @@ _STYLE = "dark watercolor, misty atmosphere, cinematic vertical"
 _TIMEOUT = 25
 
 
+def pollinations_url(description: str, width: int = 1080, height: int = 1920) -> str:
+    """
+    Build a Pollinations.ai image URL without fetching anything.
+
+    Zero-RAM by design: returns a string the client renders directly, so the
+    server never downloads, decodes, or stores the image. Used by the CRT
+    player in /godmode.
+    """
+    encoded = urllib.parse.quote(f"{description[:300]}, {_STYLE}")
+    return (
+        f"https://image.pollinations.ai/prompt/{encoded}"
+        f"?width={width}&height={height}&nologo=true&model=flux"
+    )
+
+
 def apply_visual_corruption(image_path: str, corruption_level: float) -> str:
     """
     Apply progressive PIL post-processing based on world corruption level.

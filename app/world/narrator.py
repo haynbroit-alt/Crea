@@ -213,8 +213,17 @@ def generate_script(world: dict, lost_today_id: str | None = None) -> dict:
 
     full_script = "\n\n---\n\n".join([act1, act2, act3, act4])
 
+    # Zero-RAM visual: a Pollinations URL string the client renders directly.
+    # The server never downloads or stores an image — the CRT player in
+    # /godmode points an <img> straight at this URL.
+    from app.services.image_generator import pollinations_url
+    image_prompt = act1 or act2 or full_script
+    image_url = pollinations_url(image_prompt)
+
     return {
         "day": day,
+        "narrative_text": full_script,
+        "image_url": image_url,
         "acts": {
             "act1": {"timecode": "0:00–0:45", "title": "Les Conséquences", "text": act1},
             "act2": {"timecode": "0:45–1:45", "title": "L'Événement du Jour", "text": act2},
