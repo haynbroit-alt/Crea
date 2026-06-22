@@ -3,9 +3,9 @@ import os
 import threading
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
@@ -168,6 +168,48 @@ def get_seo(request: VideoRequest):
     return seo
 
 
+def _yt_redirect_uri(request: Request) -> str:
+    # base_url already reflects https when uvicorn runs with --proxy-headers
+    return str(request.base_url).rstrip("/") + "/youtube/oauth2callback"
+
+
+@app.get("/youtube/connect")
+def youtube_connect(request: Request):
+    """One-click: send the operator to Google's consent screen."""
+    from app.services import youtube
+    if not youtube.client_ready():
+        raise HTTPException(
+            status_code=400,
+            detail="YT_CLIENT_ID / YT_CLIENT_SECRET manquants dans l'environnement.",
+        )
+    return RedirectResponse(youtube.auth_url(_yt_redirect_uri(request)))
+
+
+@app.get("/youtube/oauth2callback", response_class=HTMLResponse)
+def youtube_callback(request: Request, code: str = "", error: str = ""):
+    """Google redirects here; we exchange the code and persist the refresh token."""
+    from app.services import youtube
+    if error:
+        msg, ok = f"Autorisation refusée : {error}", False
+    elif not code:
+        msg, ok = "Aucun code reçu de Google.", False
+    else:
+        ok, detail = youtube.exchange_code(code, _yt_redirect_uri(request))
+        msg = ("✅ YouTube connecté ! Le token est mémorisé. Tu peux fermer cet "
+               "onglet et lancer une publication depuis /godmode.") if ok else \
+              f"❌ Échec : {detail}"
+    colour = "#39ff14" if ok else "#ff3131"
+    html = f"""<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>YouTube — connexion</title>
+<style>body{{background:#05050a;color:{colour};font-family:'Courier New',monospace;
+padding:48px;text-align:center;text-shadow:0 0 6px {colour}}}
+a{{color:#39ff14}}</style></head><body>
+<h2>{msg}</h2>
+<p style="margin-top:24px"><a href="/godmode">‹ retour au terminal</a></p>
+</body></html>"""
+    return HTMLResponse(html, status_code=200 if ok else 400)
+
+
 @app.get("/godmode", response_class=HTMLResponse)
 def god_mode_dashboard():
     """
@@ -191,6 +233,9 @@ def god_mode_dashboard():
     shadow = world.get("shadow_log", [])
     ai_on = is_available()
     sb_on = sb_configured()
+    from app.services import youtube as _yt
+    yt_client_ready = _yt.client_ready()
+    yt_connected = _yt.is_configured()
 
     lost_html = "".join(
         f"<span class='badge'>{get_memory(m).get('name', m)}</span>"
@@ -322,6 +367,17 @@ def god_mode_dashboard():
   <button class="btn" id="publish-btn" type="button"
           style="background:#ff00aa;box-shadow:0 0 12px #ff00aa;margin-top:8px">🎬 PUBLIER UN SHORT YOUTUBE (avance + rendu + upload)</button>
   <p id="publish-out" style="font-size:.8em;opacity:.7;margin-top:6px;min-height:1.1em"></p>
+
+  <div class="card" style="margin-top:14px">
+    <h3>📺 YOUTUBE</h3>
+    <p>Statut : <b style="color:{'#39ff14' if yt_connected else '#ffb000'}">{
+        'CONNECTÉ ✅' if yt_connected else ('CLIENT OK — non connecté' if yt_client_ready else 'CLIENT OAUTH MANQUANT')
+    }</b></p>
+    {"<a class='btn' style='background:#39ff14;box-shadow:0 0 12px #39ff14;text-decoration:none;display:block' href='/youtube/connect'>🔗 CONNECTER YOUTUBE (1 clic)</a>" if yt_client_ready and not yt_connected else ""}
+    {"<a class='btn' style='background:#1a1a2e;border:1px solid #39ff14;color:#39ff14;box-shadow:none;text-decoration:none;display:block' href='/youtube/connect'>↻ RECONNECTER</a>" if yt_connected else ""}
+    <p style="font-size:.78em;opacity:.7;margin-top:8px">URI de redirection à enregistrer dans ton client OAuth Google (type Web) :</p>
+    <code id="yt-redirect" style="font-size:.75em;color:#39ff14;word-break:break-all"></code>
+  </div>
 
   <div style="margin-top:18px;border-top:1px solid rgba(57,255,20,.25);padding-top:12px">
     <label style="opacity:.55;font-size:.8em">invite de commande</label>
@@ -529,6 +585,10 @@ function triggerParadox() {
     requestAnimationFrame(() => { veil.style.opacity = "1"; });
     setTimeout(function () { location.href = "/paradox"; }, 2400);
 }
+
+// show the exact redirect URI to register in the Google OAuth client
+const __ytr = document.getElementById('yt-redirect');
+if (__ytr) __ytr.textContent = window.location.origin + "/youtube/oauth2callback";
 </script>"""
 
 
