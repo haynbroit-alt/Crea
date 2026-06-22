@@ -86,3 +86,39 @@ def save_world(state: dict) -> bool:
     except Exception as exc:
         logger.warning("Supabase save failed: %s", exc)
         return False
+
+
+def load_value(key: str) -> dict | None:
+    """Fetch an arbitrary key's JSON value (same table as world state)."""
+    if not is_configured():
+        return None
+    try:
+        r = requests.get(
+            f"{settings.supabase_url}/rest/v1/{_TABLE}",
+            headers=_headers(),
+            params={"key": f"eq.{key}", "select": "state_json"},
+            timeout=_TIMEOUT,
+        )
+        rows = r.json()
+        if isinstance(rows, list) and rows:
+            return rows[0]["state_json"]
+    except Exception as exc:
+        logger.warning("Supabase load_value failed: %s", exc)
+    return None
+
+
+def save_value(key: str, value: dict) -> bool:
+    """Upsert an arbitrary key's JSON value."""
+    if not is_configured():
+        return False
+    try:
+        r = requests.post(
+            f"{settings.supabase_url}/rest/v1/{_TABLE}",
+            headers=_headers(prefer="resolution=merge-duplicates,return=minimal"),
+            json={"key": key, "state_json": value},
+            timeout=_TIMEOUT,
+        )
+        return r.status_code in (200, 201, 204)
+    except Exception as exc:
+        logger.warning("Supabase save_value failed: %s", exc)
+        return False
