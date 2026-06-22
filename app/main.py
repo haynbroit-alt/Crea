@@ -316,6 +316,8 @@ def god_mode_dashboard():
   <h3>🗄️ SHADOW LOG</h3>
   <div class="log-box">{shadow_html}</div>
 
+  <button class="btn" id="init-btn" type="button"
+          style="background:#39ff14;box-shadow:0 0 12px #39ff14;margin-bottom:8px">🌱 INITIALISER LE MONDE (Jour 1)</button>
   <button class="btn" id="advance-btn" type="button">☣️ FORCER L'AVANCE DU MONDE (rendu zéro RAM)</button>
 
   <div style="margin-top:18px;border-top:1px solid rgba(57,255,20,.25);padding-top:12px">
@@ -373,14 +375,56 @@ if (__episode && __episode.text) {
         "Aucune transmission. Cliquez sur le bouton rouge pour générer le premier épisode.";
 }
 
+// POST helper that surfaces the server's error detail instead of a bare status.
+async function __post(path) {
+    const resp = await fetch(path, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' },
+        redirect: 'follow',
+    });
+    let data = null;
+    try { data = await resp.json(); } catch (e) {}
+    if (!resp.ok) {
+        const detail = (data && data.detail) ? data.detail : ('HTTP ' + resp.status);
+        const err = new Error(detail); err.status = resp.status; throw err;
+    }
+    return data;
+}
+
+const __initBtn = document.getElementById('init-btn');
+if (__initBtn) {
+    __initBtn.addEventListener('click', async function () {
+        __initBtn.disabled = true;
+        __initBtn.textContent = "INITIALISATION…";
+        try {
+            await __post('/world/init');
+            __initBtn.textContent = "✅ MONDE INITIALISÉ — RECHARGEMENT…";
+            setTimeout(function () { location.reload(); }, 900);
+        } catch (err) {
+            __initBtn.textContent = "❌ " + err.message;
+            __initBtn.disabled = false;
+        }
+    });
+}
+
 const __btn = document.getElementById('advance-btn');
 __btn.addEventListener('click', async function () {
     __btn.disabled = true;
     __btn.textContent = "DÉCLENCHEMENT…";
     try {
-        const resp = await fetch('/world/advance', { method: 'POST' });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const episode = await resp.json();
+        let episode;
+        try {
+            episode = await __post('/world/advance');
+        } catch (err) {
+            // The world may not be initialised yet — bootstrap, then retry once.
+            if (/initialis/i.test(err.message) || err.status === 400) {
+                __btn.textContent = "MONDE ABSENT — INITIALISATION…";
+                await __post('/world/init');
+                episode = await __post('/world/advance');
+            } else {
+                throw err;
+            }
+        }
         const text = episode.narrative_text || episode.full_script || "";
         playLatestEpisode(text, episode.image_url || "");
         __btn.textContent = "✅ MONDE AVANCÉ — RECHARGEMENT…";
