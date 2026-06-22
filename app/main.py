@@ -319,6 +319,9 @@ def god_mode_dashboard():
   <button class="btn" id="init-btn" type="button"
           style="background:#39ff14;box-shadow:0 0 12px #39ff14;margin-bottom:8px">🌱 INITIALISER LE MONDE (Jour 1)</button>
   <button class="btn" id="advance-btn" type="button">☣️ FORCER L'AVANCE DU MONDE (rendu zéro RAM)</button>
+  <button class="btn" id="publish-btn" type="button"
+          style="background:#ff00aa;box-shadow:0 0 12px #ff00aa;margin-top:8px">🎬 PUBLIER UN SHORT YOUTUBE (avance + rendu + upload)</button>
+  <p id="publish-out" style="font-size:.8em;opacity:.7;margin-top:6px;min-height:1.1em"></p>
 
   <div style="margin-top:18px;border-top:1px solid rgba(57,255,20,.25);padding-top:12px">
     <label style="opacity:.55;font-size:.8em">invite de commande</label>
@@ -434,6 +437,50 @@ __btn.addEventListener('click', async function () {
         __btn.disabled = false;
     }
 });
+
+// ── PUBLICATION YOUTUBE SHORT (rendu ffmpeg + upload en arrière-plan) ──
+const __pubBtn = document.getElementById('publish-btn');
+const __pubOut = document.getElementById('publish-out');
+if (__pubBtn) {
+    __pubBtn.addEventListener('click', async function () {
+        __pubBtn.disabled = true;
+        __pubBtn.textContent = "🎬 FORGE LANCÉE…";
+        try {
+            const job = await __post('/world/publish');
+            __pubOut.textContent = "Job " + job.job_id + " — rendu en cours (1–3 min)…";
+            const statusUrl = job.status_url;
+            const poll = setInterval(async function () {
+                try {
+                    const r = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+                    const s = await r.json();
+                    if (s.status === 'completed') {
+                        clearInterval(poll);
+                        const res = s.result || {};
+                        const yt = res.youtube;
+                        if (yt && yt.url) {
+                            __pubOut.innerHTML = "✅ Publié : <a href='" + yt.url + "' target='_blank' style='color:#39ff14'>" + yt.url + "</a>";
+                        } else if (res.media_url) {
+                            __pubOut.innerHTML = "✅ Vidéo rendue (upload YouTube non configuré) : <a href='" + res.media_url + "' target='_blank' style='color:#39ff14'>voir</a>";
+                        } else {
+                            __pubOut.textContent = "✅ Terminé (aucune vidéo rendue — ffmpeg indisponible ?).";
+                        }
+                        __pubBtn.textContent = "🎬 PUBLIER UN AUTRE SHORT";
+                        __pubBtn.disabled = false;
+                    } else if (s.status === 'failed') {
+                        clearInterval(poll);
+                        __pubOut.textContent = "❌ Échec : " + (s.error || 'inconnu');
+                        __pubBtn.textContent = "🎬 RÉESSAYER";
+                        __pubBtn.disabled = false;
+                    }
+                } catch (e) {}
+            }, 4000);
+        } catch (err) {
+            __pubOut.textContent = "❌ " + err.message;
+            __pubBtn.textContent = "🎬 RÉESSAYER";
+            __pubBtn.disabled = false;
+        }
+    });
+}
 
 // ── L'EFFET PARADOXE : la clé enfouie dans l'oubli ouvre la faille ──
 // __SECRET__ est dérivée de l'état du monde côté serveur (zéro stockage) — la
