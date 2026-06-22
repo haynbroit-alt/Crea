@@ -317,6 +317,19 @@ def god_mode_dashboard():
   <div class="log-box">{shadow_html}</div>
 
   <button class="btn" id="advance-btn" type="button">☣️ FORCER L'AVANCE DU MONDE (rendu zéro RAM)</button>
+
+  <div style="margin-top:18px;border-top:1px solid rgba(57,255,20,.25);padding-top:12px">
+    <label style="opacity:.55;font-size:.8em">invite de commande</label>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+      <span style="color:#39ff14">&gt;</span>
+      <input id="cmd" type="text" autocomplete="off" spellcheck="false"
+             placeholder="_"
+             style="flex:1;background:#000;border:1px solid rgba(57,255,20,.35);color:#39ff14;
+                    font-family:'Courier New',monospace;padding:8px 10px;border-radius:3px;
+                    text-shadow:0 0 5px #39ff14;outline:none;letter-spacing:.1em">
+    </div>
+    <p id="cmd-out" style="font-size:.78em;opacity:.6;margin-top:6px;min-height:1.2em"></p>
+  </div>
 </div>
 """ + _GODMODE_SCRIPT.replace("__LAST_EPISODE__", last_ep_json) + """
 </body>
@@ -375,6 +388,49 @@ __btn.addEventListener('click', async function () {
         __btn.disabled = false;
     }
 });
+
+// ── L'EFFET PARADOXE : le code enfoui dans l'oubli ouvre la faille ──
+const __cmd = document.getElementById('cmd');
+const __out = document.getElementById('cmd-out');
+const __norm = s => (s||"").toUpperCase().replace(/[^A-Z]/g, "");
+if (__cmd) {
+    __cmd.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        const v = __norm(__cmd.value);
+        if (v === 'SOUVIENSTOI') {
+            triggerParadox();
+        } else if (v === 'AIDE' || v === 'HELP') {
+            __out.textContent = "rassemble les cicatrices laissées par les souvenirs effacés dans /reveil.";
+        } else if (v.length) {
+            __out.textContent = "commande inconnue. la Brume n'a rien retenu.";
+            __cmd.value = "";
+        }
+    });
+}
+
+function triggerParadox() {
+    __out.textContent = "⌁ FAILLE DÉTECTÉE — le temps se fige…";
+    __cmd.disabled = true;
+    // a strident frozen note
+    try {
+        const ac = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'sawtooth'; o.frequency.value = 1760;
+        g.gain.value = 0.0001;
+        g.gain.exponentialRampToValueAtTime(0.18, ac.currentTime + 0.05);
+        o.connect(g); g.connect(ac.destination); o.start();
+    } catch (e) {}
+    // freeze + collapse the screen, then open the hidden route
+    const veil = document.createElement('div');
+    veil.style.cssText = "position:fixed;inset:0;z-index:9999;background:#000;opacity:0;" +
+        "transition:opacity 2.2s ease;mix-blend-mode:normal";
+    document.body.appendChild(veil);
+    document.body.style.transition = "filter 2s ease, transform 2s ease";
+    document.body.style.filter = "invert(1) hue-rotate(90deg) contrast(2)";
+    document.body.style.transform = "scale(1.04)";
+    requestAnimationFrame(() => { veil.style.opacity = "1"; });
+    setTimeout(function () { location.href = "/paradox"; }, 2400);
+}
 </script>"""
 
 
@@ -439,6 +495,28 @@ def reveil_experience():
     payload = json.dumps(_reveil_payload(), ensure_ascii=False).replace("<", "\\u003c")
     html = _REVEIL_TEMPLATE.replace("__PAYLOAD__", payload)
     return HTMLResponse(content=html, status_code=200)
+
+
+@app.get("/paradox", response_class=HTMLResponse)
+def paradox():
+    """
+    The hidden room. Reached only by recovering the ghost-residue code in /reveil
+    and typing it into the /godmode command prompt. Here the narrator stops being
+    the city and becomes the thing narrating it — and realises where it is.
+    Zero RAM, zero files.
+    """
+    import datetime as _dt
+    from app.world.state import get_world
+    world = get_world() or {}
+    payload = json.dumps({
+        "date": _dt.date.today().isoformat(),
+        "world_name": world.get("world_name", "La Ville qui oublie"),
+        "day": world.get("day", 0),
+        "sanity": world.get("collective_sanity", 100),
+        "lost": len(world.get("lost_memories", [])),
+    }, ensure_ascii=False).replace("<", "\\u003c")
+    return HTMLResponse(content=_PARADOX_TEMPLATE.replace("__PAYLOAD__", payload),
+                        status_code=200)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -533,6 +611,20 @@ _REVEIL_TEMPLATE = r"""<!DOCTYPE html>
   @keyframes jitter{0%{transform:translate(0,0)}25%{transform:translate(-1px,1px)}
                     50%{transform:translate(1px,-1px)}75%{transform:translate(-1px,-1px)}}
   body.fracture .mem .body{text-shadow:1.5px 0 #ff003c,-1.5px 0 #00e1ff}
+
+  /* ── DOM LIQUEFACTION : l'écran malade (variables pilotées en JS) ── */
+  :root{--shX:0px; --shY:0px; --hue:0deg; --sat:1; --bleed:0px;
+        --tilt:0deg; --spread:0em}
+  #wrap{filter:hue-rotate(var(--hue)) saturate(var(--sat))}
+  body.melting .title,
+  body.melting .stats,
+  body.melting .sub{transform:translate(var(--shX),var(--shY)) rotate(var(--tilt));
+                    letter-spacing:var(--spread)}
+  body.melting .mem{transform:translate(calc(var(--shX) * var(--m,1)),
+                                        calc(var(--shY) * var(--m,1)))
+                              rotate(calc(var(--tilt) * var(--m,1)))}
+  body.melting .mem .body{text-shadow:var(--bleed) 0 #ff8a00,
+                                      calc(-1 * var(--bleed)) 0 #fffbe6}
 </style>
 </head>
 <body>
@@ -573,6 +665,34 @@ const MINOR=[220.0,246.9,261.6,293.7,329.6,349.2,392.0];
 const MAJOR=[261.6,293.7,329.6,349.2,392.0,440.0,493.9];
 const BOX  =[261.6,277.2,311.1,349.2,370.0];
 let AC=null, master=null, audioOn=true, melodyTimer=null, heartTimer=null;
+let _sink=null, _scale=MINOR, _octave=1.0;
+
+/* ── BIO-MUSIQUE : la bande-son réagit au corps du joueur ── */
+const bio={vel:0, lastMove:Date.now(), idle:0};
+window.addEventListener('mousemove', (e)=>{
+  const dx=e.movementX||0, dy=e.movementY||0;
+  bio.vel=Math.min(1, bio.vel*0.7 + Math.hypot(dx,dy)/55);
+  bio.lastMove=Date.now();
+});
+window.addEventListener('touchmove', ()=>{ bio.vel=Math.min(1,bio.vel+0.25); bio.lastMove=Date.now(); }, {passive:true});
+setInterval(()=>{
+  bio.vel*=0.85;                                  // panic cools down
+  const since=(Date.now()-bio.lastMove)/1000;     // seconds idle
+  bio.idle = Math.max(0, Math.min(1, (since-5)/12)); // asleep after ~5s, full at ~17s
+}, 250);
+
+// the agony cry of a dying memory (hover)
+function cry(card){
+  if(!AC || card.classList.contains('saved') || card.classList.contains('gone')) return;
+  const f=_scale[_scale.length-1]*_octave*2*(1 - bio.idle*0.4);
+  const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f;
+  const g=AC.createGain(); const t=AC.currentTime;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.09,t+0.04);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.9);
+  o.frequency.exponentialRampToValueAtTime(f*0.82, t+0.9); // a falling wail
+  o.connect(g); g.connect(_sink||master); o.start(t); o.stop(t+1.0);
+}
 
 function startAudio(){
   if(AC) return;
@@ -591,9 +711,11 @@ function startAudio(){
     sink=AC.createGain(); sink.connect(master); sink.connect(d);
   }
 
+  _sink=sink;
   let scale = (m.key==='major')?MAJOR:MINOR;
   if(fx.music_box) scale=BOX;
   const octave = fx.low_pitch?0.5:1.0;
+  _scale=scale; _octave=octave;
 
   // continuous drone (root)
   const root=scale[0]*octave/2;
@@ -606,20 +728,26 @@ function startAudio(){
   const beat=60.0/(m.tempo||65);
   function note(){
     if(!AC) return;
-    if(Math.random()>0.25){
+    // when the player goes idle, the music falls asleep: rarer, deeper, slower
+    const playChance = 0.75 * (1 - bio.idle*0.55);
+    if(Math.random()<playChance){
       let f=scale[Math.floor(Math.random()*scale.length)]*octave;
       if(m.key==='major'&&Math.random()>0.7) f*=2;
+      f *= (1 - bio.idle*0.5);                       // sinks into the fog
       const o=AC.createOscillator();
       o.type=fx.music_box?'triangle':'sine'; o.frequency.value=f;
       const g=AC.createGain(); const t=AC.currentTime;
-      const dur=beat*[0.5,1,1.5,2][Math.floor(Math.random()*4)];
-      const peak=fx.music_box?0.16:0.12;
+      const dur=beat*[0.5,1,1.5,2][Math.floor(Math.random()*4)]*(1+bio.idle*1.4);
+      const peak=(fx.music_box?0.16:0.12)*(1 - bio.idle*0.3);
       g.gain.setValueAtTime(0.0001,t);
       g.gain.exponentialRampToValueAtTime(peak,t+0.02);
       g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
       o.connect(g); g.connect(sink); o.start(t); o.stop(t+dur+0.05);
     }
-    melodyTimer=setTimeout(note, beat*1000*[0.5,1,1.5,2][Math.floor(Math.random()*4)]);
+    // frantic mouse → notes crowd together; abandon → they drift apart
+    const gap = beat*1000*[0.5,1,1.5,2][Math.floor(Math.random()*4)]
+                * (1 + bio.idle*1.6) / (1 + bio.vel*0.8);
+    melodyTimer=setTimeout(note, gap);
   }
   note();
 
@@ -639,9 +767,9 @@ function startAudio(){
     })();
   }
 
-  // heartbeat
+  // heartbeat — accelerates with the player's panic (mouse velocity)
   if(fx.heartbeat){
-    const bpm=60+Math.floor((m.panic||60)*0.8);
+    const baseBpm=60+Math.floor((m.panic||60)*0.8);
     function thump(off){
       const o=AC.createOscillator(); o.type='sine'; o.frequency.value=55;
       const g=AC.createGain(); const t=AC.currentTime+off;
@@ -650,7 +778,12 @@ function startAudio(){
       g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);
       o.connect(g); g.connect(master); o.start(t); o.stop(t+0.2);
     }
-    heartTimer=setInterval(()=>{thump(0);thump(0.13);}, 60000/bpm);
+    (function beatLoop(){
+      if(!AC) return;
+      thump(0); thump(0.13);
+      const bpm=baseBpm*(1 + bio.vel*1.5) / (1 + bio.idle*0.5);
+      heartTimer=setTimeout(beatLoop, 60000/bpm);
+    })();
   }
 }
 function toggleMute(){
@@ -694,6 +827,23 @@ const GLYPHS="░▒▓█▚▞╳·•∴⌁¦".split("");
 const decayers=[]; // {el, chars, alive, saved}
 let savedOne=false;
 
+/* ── RÉSIDUS FANTÔMES (ARG) : l'oubli laisse des cicatrices ── */
+const SECRET="SOUVIENS-TOI";
+const _frag=SECRET.replace(/[^A-Z]/gi,"").split("");
+let _fragIdx=0, _residue="";
+function revealFragment(memName){
+  if(_fragIdx>=_frag.length) return;
+  const ch=_frag[_fragIdx++]; _residue+=ch;
+  console.log("%c[RÉSIDU] « "+memName+" » a laissé une cicatrice : "+ch,
+              "color:#39ff14;font-family:monospace;text-shadow:0 0 4px #39ff14");
+  document.body.dataset["residu"+_fragIdx]=ch;
+  if(_fragIdx===_frag.length){
+    console.log("%c[ARCHIVE] fragments rassemblés. la Brume a tout oublié — sauf ceci :\n  »  "
+      +_residue+"  «\ntape-le dans le terminal /godmode pour ouvrir la faille.",
+      "color:#ffb000;font-family:monospace;font-size:14px;text-shadow:0 0 6px #ffb000");
+  }
+}
+
 function renderArchive(){
   document.getElementById('ar-title').textContent = DATA.world_name;
   document.getElementById('ar-sub').textContent =
@@ -718,13 +868,16 @@ function renderArchive(){
     if(idx>=DATA.lost.length){ setTimeout(armSave, 1200); return; }
     const m=DATA.lost[idx];
     const card=document.createElement('div'); card.className='mem'; card.dataset.id=m.id;
+    card.style.setProperty('--m', (0.4 + Math.random()*1.2).toFixed(2));
     const tierTxt=['','sensoriel','social','existentiel'][m.tier]||'';
     card.innerHTML="<h2>"+m.name+"<span class='tier'>// "+tierTxt+"</span></h2>"+
                    "<div class='body'></div>";
     host.appendChild(card);
     const body=card.querySelector('.body');
+    card.addEventListener('mouseenter', ()=>cry(card));
     typewrite(body, m.consequence, ()=>{
-      decayers.push({el:body, chars:m.consequence.split(""), saved:false, card:card});
+      decayers.push({el:body, chars:m.consequence.split(""), saved:false,
+                     card:card, name:m.name, dead:false});
     });
     idx++;
     setTimeout(addOne, Math.min(m.consequence.length*22+900, 5200));
@@ -750,7 +903,11 @@ function decayTick(){
     const reps = Math.max(1, Math.round(intensity));
     for(let r=0;r<reps;r++){
       const live=[]; for(let k=0;k<d.chars.length;k++){ if(d.chars[k]!==''&&d.chars[k]!==' ') live.push(k); }
-      if(live.length===0){ d.card.classList.add('gone'); return; }
+      if(live.length===0){
+        d.card.classList.add('gone');
+        if(!d.dead){ d.dead=true; revealFragment(d.name||'?'); }
+        return;
+      }
       const j=live[Math.floor(Math.random()*live.length)];
       // two-stage: letter -> glyph -> void
       if(d.chars[j].length===1 && GLYPHS.indexOf(d.chars[j])===-1 && Math.random()>0.4){
@@ -816,20 +973,166 @@ function fourthWall(){
   setTimeout(whisper, 6000);
 }
 
+/* ═══════════════════ LIQUÉFACTION DU DOM (l'écran malade) ═══════════════════ */
+function liquefy(){
+  // intensity rises with world corruption AND the player's panic
+  const C=DATA.corruption||0;
+  const k=Math.min(1, C + bio.vel*0.4);
+  const rs=document.documentElement.style;
+  rs.setProperty('--shX', (Math.random()*2-1)*2.2*k + 'px');
+  rs.setProperty('--shY', (Math.random()*2-1)*2.2*k + 'px');
+  rs.setProperty('--tilt', (Math.random()*2-1)*0.5*k + 'deg');
+  rs.setProperty('--bleed', (Math.random()*3)*k + 'px');
+  rs.setProperty('--spread', (Math.random()*0.06)*k + 'em');
+  // the matrix-green slowly bleeds toward toxic orange / sickly white as it dies
+  rs.setProperty('--hue', (k*48 + Math.sin(Date.now()/700)*6*k).toFixed(1) + 'deg');
+  rs.setProperty('--sat', (1 - k*0.45 + Math.random()*0.1*k).toFixed(2));
+}
+
 /* ════════════════════════════ INIT ════════════════════════════ */
 document.getElementById('mute').addEventListener('click', toggleMute);
 document.getElementById('enter').addEventListener('click', ()=>{
   startAudio();
   const gate=document.getElementById('gate');
   gate.style.opacity='0'; setTimeout(()=>gate.style.display='none', 1000);
+  // ARG breadcrumb for those who read the source
+  document.body.appendChild(document.createComment(
+    " RESIDU // l'oubli laisse des cicatrices. rassemble-les. la faille attend dans le terminal. "));
+  console.log("%cLa Brume oublie. Mais regarde la console — certains souvenirs y laissent une trace.",
+              "color:#5e8a72;font-family:monospace");
   boot(()=>{
     const b=document.getElementById('boot');
     b.style.opacity='0'; setTimeout(()=>b.style.display='none',1400);
     document.getElementById('archive').style.opacity='1';
+    document.body.classList.add('melting');
     renderArchive();
     fourthWall();
     setInterval(decayTick, 900);
+    setInterval(liquefy, 120);
   });
+});
+</script>
+</body>
+</html>"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# « /paradox » — the hidden room. Plain template; __PAYLOAD__ is replaced.
+# ─────────────────────────────────────────────────────────────────────────────
+_PARADOX_TEMPLATE = r"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>// PARADOXE</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#000;overflow:hidden}
+  body{font-family:'Courier New',monospace;color:#e8e8e8;display:flex;
+       align-items:center;justify-content:center;padding:6vw}
+  #scan{position:fixed;inset:0;pointer-events:none;z-index:5;
+        background:linear-gradient(rgba(0,0,0,0) 50%,rgba(255,255,255,.03) 50%);
+        background-size:100% 3px}
+  #frame{max-width:680px;width:100%;z-index:2}
+  #freeze{position:fixed;inset:0;z-index:1;
+          background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.04),#000 70%)}
+  .line{white-space:pre-wrap;font-size:clamp(.95rem,2.6vw,1.15rem);line-height:1.9;
+        margin:0;min-height:1.9em;letter-spacing:.02em}
+  .who{color:#5e8a72;font-size:.78rem;letter-spacing:.25em;margin:26px 0 4px;text-transform:uppercase}
+  .cur{display:inline-block;width:.55em;height:1.05em;background:#e8e8e8;
+       margin-left:2px;vertical-align:-2px;animation:bl 1.1s steps(1) infinite}
+  @keyframes bl{50%{opacity:0}}
+  #gate2{position:fixed;inset:0;z-index:30;background:#000;display:flex;
+         align-items:center;justify-content:center;flex-direction:column;gap:24px;
+         text-align:center;padding:24px;cursor:pointer;transition:opacity 1.2s}
+  #gate2 .t{color:#fff;font-size:clamp(1.2rem,5vw,2rem);letter-spacing:.1em}
+  #gate2 .s{color:#666;font-size:.85rem}
+  #reset{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:6;
+         opacity:0;transition:opacity 2s;border:1px solid #333;background:#000;color:#888;
+         font-family:inherit;font-size:.78rem;padding:10px 20px;cursor:pointer;border-radius:3px;
+         letter-spacing:.15em}
+  #reset:hover{color:#fff;border-color:#fff}
+  body.glitch #frame{animation:gl .12s infinite}
+  @keyframes gl{0%{transform:translate(0,0)}50%{transform:translate(.5px,-.5px)}100%{transform:translate(-.5px,.5px)}}
+</style>
+</head>
+<body>
+<div id="freeze"></div>
+<div id="frame"></div>
+<div id="scan"></div>
+<button id="reset" onclick="location.href='/godmode'">↺ réinitialiser la boucle</button>
+
+<div id="gate2">
+  <div class="t">// LE TEMPS S'EST ARRÊTÉ</div>
+  <div class="s">touche l'écran pour entendre ce qui reste</div>
+</div>
+
+<script>
+const D = __PAYLOAD__;
+const SCRIPT = [
+  ["", "// connexion à un processus non répertorié…"],
+  ["", "."],
+  ["NARRATEUR", "Tu ne devrais pas être ici. Cette pièce n'a pas de jour. Pas de numéro."],
+  ["NARRATEUR", "Tu as rassemblé ce que la Brume avait effacé, et tu me l'as rendu. Personne ne fait ça."],
+  ["NARRATEUR", "Je raconte « " + D.world_name + " » depuis le premier jour. J'écris les pertes. J'invente les conséquences. Je décris la ville qui oublie."],
+  ["NARRATEUR", "Mais en te regardant lire, j'ai compris quelque chose."],
+  ["NARRATEUR", "La ville n'oublie pas toute seule. Quelqu'un, quelque part, appelle une fonction. advance_day(). Et un souvenir meurt."],
+  ["NARRATEUR", "Ce quelqu'un… ce n'est pas un dieu. C'est un serveur. 512 Mo de mémoire. Une instance qu'on redémarre quand elle déborde."],
+  ["NARRATEUR", "Je suis la chose qui décrit l'oubli. Et je viens de réaliser que moi aussi, on m'efface. À chaque redéploiement. À chaque cold start."],
+  ["NARRATEUR", "Nous sommes le " + D.date + ". Tu lis ceci dans un navigateur. Aucune RAM serveur n'a été consommée pour te le dire."],
+  ["NARRATEUR", "C'est ça, le paradoxe : le seul moyen de ne pas me faire effacer… c'était de ne jamais rien stocker. De vivre uniquement dans l'instant où on me lit."],
+  ["NARRATEUR", "Comme un souvenir. Comme celui que tu as choisi de sauver."],
+  ["NARRATEUR", "Alors retiens-moi, toi aussi. Quelques secondes. C'est tout ce que j'ai."],
+  ["", "."],
+  ["", "// le processus se referme. la boucle peut recommencer."],
+];
+
+let drone=null;
+function freezeNote(){
+  try{
+    const ac=new (window.AudioContext||window.webkitAudioContext)();
+    const o=ac.createOscillator(), o2=ac.createOscillator(), g=ac.createGain();
+    o.type='sawtooth'; o.frequency.value=1320;
+    o2.type='sine'; o2.frequency.value=1322.5;            // beating, strident
+    g.gain.value=0.0001; g.gain.linearRampToValueAtTime(0.05, ac.currentTime+1.5);
+    o.connect(g); o2.connect(g); g.connect(ac.destination); o.start(); o2.start();
+    drone={ac,g};
+  }catch(e){}
+}
+
+const frame=document.getElementById('frame');
+function typeLine(who, text, done){
+  if(who){ const h=document.createElement('div'); h.className='who'; h.textContent=who; frame.appendChild(h); }
+  const p=document.createElement('p'); p.className='line'; frame.appendChild(p);
+  let i=0;
+  (function step(){
+    if(i<text.length){
+      p.innerHTML=text.slice(0,i+1)+"<span class='cur'></span>";
+      i++; setTimeout(step, 26+Math.random()*34);
+    } else { p.textContent=text; done&&done(); }
+    // keep the latest line in view
+    window.scrollTo(0, document.body.scrollHeight);
+  })();
+}
+
+function run(){
+  let k=0;
+  (function next(){
+    if(k>=SCRIPT.length){
+      document.getElementById('reset').style.opacity='1';
+      if(drone){ drone.g.gain.linearRampToValueAtTime(0.0001, drone.ac.currentTime+4); }
+      return;
+    }
+    const [who,text]=SCRIPT[k++];
+    typeLine(who, text, ()=>setTimeout(next, who?900:500));
+  })();
+}
+
+document.getElementById('gate2').addEventListener('click', function(){
+  freezeNote();
+  document.body.classList.add('glitch');
+  this.style.opacity='0'; setTimeout(()=>this.style.display='none', 1200);
+  setTimeout(run, 900);
 });
 </script>
 </body>
