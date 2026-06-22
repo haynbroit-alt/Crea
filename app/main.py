@@ -1097,12 +1097,25 @@ _PARADOX_TEMPLATE = r"""<!DOCTYPE html>
   #reset:hover{color:#fff;border-color:#fff}
   body.glitch #frame{animation:gl .12s infinite}
   @keyframes gl{0%{transform:translate(0,0)}50%{transform:translate(.5px,-.5px)}100%{transform:translate(-.5px,.5px)}}
+  /* alerte rouge « crash système » greffée sur la scène littéraire */
+  .alert{position:fixed;top:0;left:0;right:0;z-index:25;text-align:center;padding:12px 14px;
+         background:rgba(40,0,0,.55);border-bottom:1px solid #ff3333;color:#ff3333;font-weight:bold;
+         font-size:clamp(.95rem,3.4vw,1.45rem);text-shadow:2px 2px #00ffff;letter-spacing:.15em;
+         opacity:0;transition:opacity .6s}
+  .alert.show{opacity:1;animation:crash .2s infinite}
+  @keyframes crash{0%{transform:translate(1px,1px)}100%{transform:translate(-1px,-1px)}}
+  #simfin{position:fixed;bottom:74px;left:0;right:0;z-index:6;text-align:center;color:#ff3333;
+          font-size:.9rem;letter-spacing:.22em;text-shadow:0 0 8px #ff3333;opacity:0;transition:opacity 1.6s}
+  #simfin.show{opacity:1}
+  body.dead #freeze{background:radial-gradient(circle at 50% 50%,rgba(60,0,0,.10),#000 70%)}
 </style>
 </head>
 <body>
+<div id="alert" class="alert">⚠️ ANOMALIE TEMPORELLE DÉTECTÉE</div>
 <div id="freeze"></div>
 <div id="frame"></div>
 <div id="scan"></div>
+<div id="simfin">[ Simulation Interrompue. Écran Figé. ]</div>
 <button id="reset" onclick="location.href='/godmode'">↺ réinitialiser la boucle</button>
 
 <div id="gate2">
@@ -1162,6 +1175,8 @@ function run(){
   let k=0;
   (function next(){
     if(k>=SCRIPT.length){
+      document.body.classList.add('dead');
+      document.getElementById('simfin').classList.add('show');
       document.getElementById('reset').style.opacity='1';
       if(drone){ drone.g.gain.linearRampToValueAtTime(0.0001, drone.ac.currentTime+4); }
       return;
@@ -1174,6 +1189,7 @@ function run(){
 document.getElementById('gate2').addEventListener('click', function(){
   freezeNote();
   document.body.classList.add('glitch');
+  document.getElementById('alert').classList.add('show');
   this.style.opacity='0'; setTimeout(()=>this.style.display='none', 1200);
   setTimeout(run, 900);
 });
